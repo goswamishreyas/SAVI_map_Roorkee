@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@turf/turf": "^6.5.0",
+    "jsts": "^2.11.0"
+  }
+}

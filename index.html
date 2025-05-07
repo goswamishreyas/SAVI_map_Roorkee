@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Field monitoring</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .legend {
+      line-height: 18px;
+      color: #555;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .legend-scale {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-color-box {
+      width: 20px;
+      height: 15px;
+      border: 1px solid #aaa;
+    }
+  </style>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.4.0/chart.min.js"></script>
+  <script src="static/leaflet-geotiff/leaflet-geotiff.js"></script>
+  <script src="static/leaflet-geotiff/leaflet-geotiff-plotty.js"></script>
+  <script src="static/geotiff.js"></script>  
+  <script src="static/plotty/dist/plotty.min.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    // Google Hybrid and OSM base layers
+    let google_sat = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&key=AIzaSyA5sYadpLcoOTM2irEsfD4HdA0SyE-n5Eg', {
+      maxZoom: 19,
+      attribution: 'Map data &copy; <a href="https://www.google.com/intl/en_us/help/terms_maps.html">Google</a>',
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+
+    let osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    });
+
+    // SAVI color scale (plotty)
+    plotty.addColorScale('ndvi_diff_scale', 
+      ['#7a0403','#fb7e21','#a4fc3c','#28bceb','#30123b'], 
+      [0.4918272631768786,0.5644715980703222,0.6371159329637658,0.7097602678572094,0.782404602750653]
+    );
+
+    var normalized_options = {
+      band: 0,
+      renderer: L.LeafletGeotiff.plotty({
+        displayMin: -1,
+        clampLow: true,
+        displayMax: 1,
+        colorScale: 'ndvi_diff_scale'
+      })
+    };
+
+    var currentLayer = L.leafletGeotiff('static/images/SAVI.tif', normalized_options);
+
+    // Map setup
+    var map = L.map("map", {
+      center: [29.82236, 77.8745],
+      zoom: 14,
+      layers: [osm, google_sat]
+    });
+
+    osm.setZIndex(900);
+    google_sat.setZIndex(950);
+    currentLayer.setZIndex(1000);
+
+    map.whenReady(function () {
+      currentLayer.addTo(map);
+      map.invalidateSize();
+    });
+
+    // Layer controls
+    let baseMaps = {
+      'OSM': osm,
+      'Google Satellite': google_sat
+    };
+
+    let overlayMaps = {
+      'SAVI Image': currentLayer
+    };
+
+    L.control.layers(baseMaps, overlayMaps).addTo(map);
+    L.control.scale().addTo(map);
+
+    // SAVI Legend
+    const legend = L.control({ position: "bottomright" });
+    legend.onAdd = function (map) {
+  const div = L.DomUtil.create("div", "legend");
+  div.innerHTML += `<div class="legend-title">SAVI Index</div>`;
+  div.innerHTML += `
+    <div class="legend-scale">
+      <div class="legend-item"><div class="legend-color-box" style="background:#7a0403;"></div><span>< -0.02</span></div>
+      <div class="legend-item"><div class="legend-color-box" style="background:#fb7e21;"></div><span>-0.02-0.13</span></div>
+      <div class="legend-item"><div class="legend-color-box" style="background:#a4fc3c;"></div><span>0.13-0.27</span></div>
+      <div class="legend-item"><div class="legend-color-box" style="background:#28bceb;"></div><span>0.27-0.42</span></div>
+      <div class="legend-item"><div class="legend-color-box" style="background:#30123b;"></div><span>> 0.42</span></div>
+    </div>
+  `;
+  return div;
+};
+    legend.addTo(map);
+
+    // Popup on click
+    let currentPopup = null;
+    map.on('click', function (e) {
+      var latlng = e.latlng;
+      var pixel_value = currentLayer.getValueAtLatLng(latlng.lat, latlng.lng);
+      if (pixel_value !== undefined && pixel_value !== null) {
+        var limitedPixelValue = pixel_value.toFixed(3);
+        var popupContent = `SAVI: ${limitedPixelValue}`;
+        if (currentPopup) currentPopup.remove();
+        currentPopup = L.popup().setLatLng(latlng).setContent(popupContent).openOn(map);
+      }
+    });
+  </script>
+</body>
+</html>
